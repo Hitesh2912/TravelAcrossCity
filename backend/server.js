@@ -1,80 +1,105 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const cors = require('cors');
+const helmet = require('helmet'); // Security middleware
+const morgan = require('morgan'); // Request logging
 
-// Initialize Express app
 const app = express();
-const port = 3001; // Define the port
+const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors()); // Allow Cross-Origin requests (from frontend)
-app.use(bodyParser.json()); // Parse incoming JSON requests
 
-// Pricing Model in Rupees (₹) (cute version)
-const transportCosts = {
-    'Car': 1000, // Base cost for Car in ₹
-    'Bus': 400, // Base cost for Bus in ₹
-    'MiniCab': 600, // Base cost for MiniCab in ₹
-    'Auto': 200, // Base cost for Auto in ₹
-    'Bicycle': 50, // Base cost for Bicycle in ₹
+// --- CONFIGURATION & DATA ---
+// Move business logic data to constants
+const PRICING_DATA = {
+    TRANSPORT: {
+        'Car': 1000,
+        'Bus': 400,
+        'MiniCab': 600,
+        'Auto': 200,
+        'Bicycle': 50,
+    },
+    ENTRANCE_FEES: {
+        'Lalbagh Botanical Garden': 100,
+        'Bangalore Palace': 150,
+        'Vidhana Soudha': 50,
+        'Mysore Palace': 200,
+        'Chamundi Hill': 120,
+        'Brindavan Gardens': 100,
+        'Panambur Beach': 50,
+        'Mangaladevi Temple': 70,
+        'Kadri Manjunath Temple': 80,
+    }
 };
 
-const placeCosts = {
-    'Lalbagh Botanical Garden': 100,
-    'Bangalore Palace': 150,
-    'Vidhana Soudha': 50,
-    'Mysore Palace': 200,
-    'Chamundi Hill': 120,
-    'Brindavan Gardens': 100,
-    'Panambur Beach': 50,
-    'Mangaladevi Temple': 70,
-    'Kadri Manjunath Temple': 80,
+// --- MIDDLEWARE ---
+app.use(helmet()); // Protects against common web vulnerabilities
+app.use(cors({ origin: 'http://localhost:3000' })); // Restrict to your frontend URL
+app.use(express.json()); // Built-in alternative to body-parser
+app.use(morgan('dev')); // Professional logging of every request
+
+// --- UTILITY FUNCTIONS ---
+/**
+ * Calculates total itinerary cost based on validated inputs
+ */
+const calculateItineraryCost = (places = [], transport = '') => {
+    const placesTotal = places.reduce((sum, place) => {
+        return sum + (PRICING_DATA.ENTRANCE_FEES[place] || 0);
+    }, 0);
+
+    const transportFee = PRICING_DATA.TRANSPORT[transport] || 0;
+    return placesTotal + transportFee;
 };
 
-// Function to calculate the journey cost in Rupees (₹) and add a cute touch
-const calculateCost = (selectedPlaces, transportMode) => {
-    let totalCost = 0;
+// --- ROUTES ---
 
-    // Add cost of selected places
-    selectedPlaces.forEach(place => {
-        if (placeCosts[place]) {
-            totalCost += placeCosts[place];
-        }
-    });
+/**
+ * @route   POST /submit-form
+ * @desc    Processes travel selections and returns financial estimate
+ * @access  Public
+ */
+app.post('/submit-form', (req, res) => {
+    const { selectedState, selectedCity, selectedPlaces, selectedTransport } = req.body;
 
-    // Add cost of selected transport mode
-    if (transportCosts[transportMode]) {
-        totalCost += transportCosts[transportMode];
+    // 1. Basic Validation
+    if (!selectedState || !selectedCity || !selectedTransport) {
+        return res.status(400).json({
+            success: false,
+            message: 'Invalid Request: Missing required itinerary parameters.'
+        });
     }
 
-    return totalCost;
-};
+    // 2. Business Logic Execution
+    try {
+        const totalEstimate = calculateItineraryCost(selectedPlaces, selectedTransport);
 
-app.post('/submit-form', (req, res) => {
-    const { searchQuery, selectedState, selectedCity, selectedPlaces, selectedTransport } = req.body;
+        // 3. Structured Response
+        return res.status(200).json({
+            success: true,
+            message: 'Itinerary processed successfully.',
+            journeyCost: `Estimated Total: ₹${totalEstimate.toLocaleString('en-IN')}`,
+            data: {
+                baseCurrency: 'INR',
+                totalAmount: totalEstimate,
+                referenceId: `PMJ-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+            },
+            thankYouMessage: 'A service coordinator will review your itinerary and contact you shortly.'
+        });
 
-    console.log('✨✨✨ We got your response! ✨✨✨');
-    console.log('Received data:', req.body); // Logs the data received from the frontend
-
-    // More fun logs to debug the flow
-    console.log(`💬 Search Query: ${searchQuery}`);
-    console.log(`🌟 Selected State: ${selectedState}`);
-    console.log(`🌆 Selected City: ${selectedCity}`);
-    console.log(`🗺️ Selected Places: ${selectedPlaces.join(", ")}`);
-    console.log(`🚗 Selected Transport: ${selectedTransport}`);
-
-    // Calculate the journey cost (in ₹)
-    const journeyCost = calculateCost(selectedPlaces, selectedTransport);
-
-    // Send the response back with a cute and playful message
-    res.json({
-        message: '🎉 YAY! Your response has been successfully submitted! 🎉',
-        journeyCost: `💸 The estimated cost for your journey is ₹${journeyCost} ✨`,
-        thankYouMessage: '🚀 You will be soon connected to a friendly service provider! Thank you so much for choosing us! 😊💖',
-    });
+    } catch (error) {
+        console.error('Processing Error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'An internal error occurred while calculating your itinerary.'
+        });
+    }
 });
 
-// Start the server on port 3001
-app.listen(port, () => {
-    console.log(`🎈 Server is running on http://localhost:${port} 🎈`);
+// --- SERVER INITIALIZATION ---
+app.listen(PORT, () => {
+    console.log(`
+    =========================================
+    🚀 TRAVEL API GATEWAY ACTIVE
+    📡 PORT: ${PORT}
+    🌐 MODE: DEVELOPMENT
+    =========================================
+    `);
 });
