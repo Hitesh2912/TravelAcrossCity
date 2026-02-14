@@ -43,7 +43,7 @@ export default function App() {
     setStatus({ loading: true, result: null, error: null });
 
     try {
-      const response = await fetch("http://localhost:3001/submit-form", {
+      const response = await fetch("https://travelacrosscity-backend.onrender.com/submit-form", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ selectedState, selectedCity, selectedPlaces, selectedTransport }),
